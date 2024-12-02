@@ -1,0 +1,1322 @@
+## Route+CoreDataClass.swift
+import Foundation
+import CoreData
+
+@objc(Route)
+public class Route: NSManagedObject {
+
+}
+
+## Route+CoreDataProperties
+import Foundation
+import CoreData
+
+
+extension Route {
+
+    @nonobjc public class func fetchRequest() -> NSFetchRequest<Route> {
+        return NSFetchRequest<Route>(entityName: "Route")
+    }
+
+    @NSManaged public var priority: Int16
+    @NSManaged public var route_id: UUID?
+    @NSManaged public var transportType: String?
+    @NSManaged public var toPlace: NSSet?
+    @NSManaged public var toTrip: Trip?
+
+}
+
+// MARK: Generated accessors for toPlace
+extension Route {
+
+    @objc(addToPlaceObject:)
+    @NSManaged public func addToToPlace(_ value: Place)
+
+    @objc(removeToPlaceObject:)
+    @NSManaged public func removeFromToPlace(_ value: Place)
+
+    @objc(addToPlace:)
+    @NSManaged public func addToToPlace(_ values: NSSet)
+
+    @objc(removeToPlace:)
+    @NSManaged public func removeFromToPlace(_ values: NSSet)
+
+}
+
+extension Route : Identifiable {
+
+}
+
+
+## Trip+CoreDataClass
+import Foundation
+import CoreData
+
+@objc(Trip)
+public class Trip: NSManagedObject {
+
+}
+
+## Trip+CoreDataProperties
+
+import Foundation
+import CoreData
+
+
+extension Trip {
+
+    @nonobjc public class func fetchRequest() -> NSFetchRequest<Trip> {
+        return NSFetchRequest<Trip>(entityName: "Trip")
+    }
+
+    @NSManaged public var city: String?
+    @NSManaged public var country: String?
+    @NSManaged public var dateFrom: Date?
+    @NSManaged public var dateTo: Date?
+    @NSManaged public var notes: String?
+    @NSManaged public var trip_id: UUID?
+    @NSManaged public var toPlace: NSSet?
+    @NSManaged public var toRoute: Route?
+
+}
+
+// MARK: Generated accessors for toPlace
+extension Trip {
+
+    @objc(addToPlaceObject:)
+    @NSManaged public func addToToPlace(_ value: Place)
+
+    @objc(removeToPlaceObject:)
+    @NSManaged public func removeFromToPlace(_ value: Place)
+
+    @objc(addToPlace:)
+    @NSManaged public func addToToPlace(_ values: NSSet)
+
+    @objc(removeToPlace:)
+    @NSManaged public func removeFromToPlace(_ values: NSSet)
+
+}
+
+extension Trip : Identifiable {
+
+}
+
+## Place+CoreDataClass
+import Foundation
+import CoreData
+
+@objc(Place)
+public class Place: NSManagedObject {
+
+}
+
+## Place+CoreDataProperties
+import Foundation
+import CoreData
+
+
+extension Place {
+
+    @nonobjc public class func fetchRequest() -> NSFetchRequest<Place> {
+        return NSFetchRequest<Place>(entityName: "Place")
+    }
+
+    @NSManaged public var date: Date?
+    @NSManaged public var name: String?
+    @NSManaged public var place_id: UUID?
+    @NSManaged public var toRoute: Route?
+    @NSManaged public var toTrip: Trip?
+
+}
+
+extension Place : Identifiable {
+
+}
+
+## IOS_ProjectApp
+import SwiftUI
+
+@main
+struct IOS_ProjectApp: App {
+    let persistenceController = PersistenceController.shared
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+        }
+    }
+}
+
+
+## ContentView
+import SwiftUI
+
+struct ContentView: View {
+    @FetchRequest(sortDescriptors: [NSSortDescriptor(keyPath: \Trip.trip_id, ascending: true)]) private var items: FetchedResults<Trip>
+    
+    @State private var showingAddTripView = false
+    @State private var selectedDate = Date()
+    @State private var selectedTrip: Trip? = nil
+    @State private var showingEditTripView = false
+    
+    @Environment(\.managedObjectContext) private var managedObjectContext
+
+    var body: some View {
+        TabView {
+            NavigationView {
+                List {
+                    ForEach(items) { item in
+                        NavigationLink(destination: TripDetailView(trip: item)) {
+                            VStack(alignment: .leading) {
+                                Text("\(item.country ?? "Unknown Country"), \(item.city ?? "Unknown City")")
+                                    .font(.headline)
+                                HStack {
+                                    Text("From: \(formattedDate(item.dateFrom))")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                    Spacer()
+                                    Text("To: \(formattedDate(item.dateTo))")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                        }
+                        .contextMenu {
+                            Button("Edit") {
+                                selectedTrip = item
+                                showingEditTripView = true
+                            }
+
+                        }
+                    }
+                    .onDelete(perform: deleteItems)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: {
+                            showingAddTripView.toggle()
+                        }) {
+                            Image(systemName: "plus")
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        EditButton()
+                    }
+                }
+                .sheet(isPresented: $showingAddTripView) {
+                    AddTripView(isPresented: $showingAddTripView)
+                        .environment(\.managedObjectContext, managedObjectContext)
+                }
+                .sheet(isPresented: $showingEditTripView) {
+                    if let trip = selectedTrip {
+                        EditTripView(trip: trip, isPresented: $showingEditTripView)
+                            .environment(\.managedObjectContext, managedObjectContext)
+                    }
+                }
+                .navigationTitle("My trips")
+//                .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem {
+                Image(systemName: "list.dash")
+                Text("Trips")
+            }
+
+            RecommendationsView()
+                 .tabItem {
+                     Image(systemName: "star")
+                     Text("Recommendations")
+                 }
+
+             CalendarView(selectedDate: $selectedDate, items: items)
+                 .tabItem {
+                     Image(systemName: "calendar")
+                     Text("Calendar")
+                 }
+        }
+    }
+
+    private func deleteItems(offsets: IndexSet) {
+        withAnimation {
+            offsets.map { items[$0] }.forEach(managedObjectContext.delete)
+
+            do {
+                try managedObjectContext.save()
+            } catch {
+                let nsError = error as NSError
+                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+            }
+        }
+    }
+    
+    private func formattedDate(_ date: Date?) -> String {
+        guard let date = date else { return "Unknown Date" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
+}
+
+## Persistence
+import Foundation
+import CoreData
+
+struct PersistenceController {
+    static let shared = PersistenceController()
+
+    static var preview: PersistenceController = {
+        let result = PersistenceController(inMemory: true)
+        let viewContext = result.container.viewContext
+
+        // Sample data for preview
+        for _ in 0..<10 {
+            let newTrip = Trip(context: viewContext)
+            newTrip.trip_id = UUID()
+            newTrip.country = "Sample Country"
+            newTrip.city = "Sample City"
+            newTrip.dateFrom = Date()
+            newTrip.dateTo = Date()
+            newTrip.notes = "Sample Notes"
+        }
+
+        do {
+            try viewContext.save()
+        } catch {
+            let nsError = error as NSError
+            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+        }
+
+        return result
+    }()
+
+    let container: NSPersistentContainer
+
+    init(inMemory: Bool = false) {
+        container = NSPersistentContainer(name: "IOS_Project")
+        if inMemory {
+            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
+        }
+        container.loadPersistentStores(completionHandler: { (storeDescription, error) in
+            if let error = error as NSError? {
+                fatalError("Unresolved error \(error), \(error.userInfo)")
+            }
+        })
+    }
+}
+
+## AddTripView
+import SwiftUI
+import CoreData
+
+struct AddTripView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+    @State private var refreshView = UUID()
+    @Binding var isPresented: Bool
+
+    @State private var country = ""
+    @State private var city = ""
+    @State private var notes = ""
+    @State private var dateFrom = Date()
+    @State private var dateTo = Date()
+
+    @State private var countryError = ""
+    @State private var cityError = ""
+    @State private var notesError = ""
+    @State private var dateError = ""
+
+    @Environment(\.managedObjectContext) private var managedObjectContext
+    @Environment(\.presentationMode) private var presentationMode
+
+    init(isPresented: Binding<Bool>) {
+        self._isPresented = isPresented
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Trip Details")) {
+                    TextField("Country", text: $country)
+                        .onChange(of: country) { _ in validateCountry() }
+                    if !countryError.isEmpty {
+                        Text(countryError).foregroundColor(.red)
+                    }
+
+                    TextField("City", text: $city)
+                        .onChange(of: city) { _ in validateCity() }
+                    if !cityError.isEmpty {
+                        Text(cityError).foregroundColor(.red)
+                    }
+
+                    TextField("Notes", text: $notes)
+                        .onChange(of: notes) { _ in validateNotes() }
+                    if !notesError.isEmpty {
+                        Text(notesError).foregroundColor(.red)
+                    }
+
+                    DatePicker("From", selection: $dateFrom, displayedComponents: [.date, .hourAndMinute])
+                    DatePicker("To", selection: $dateTo, displayedComponents: [.date, .hourAndMinute])
+                        .onChange(of: dateTo) { _ in validateDates() }
+                    if !dateError.isEmpty {
+                        Text(dateError).foregroundColor(.red)
+                    }
+                }
+
+                Section {
+                    HStack(spacing: 10) {
+                        Button("Confirm") {
+                            if fieldsAreValid(){
+                                saveTrip()
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(fieldsAreValid() ? Color.blue : Color.gray)
+                        .cornerRadius(8)
+                        .frame(width: 130)
+                        .disabled(!fieldsAreValid())
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+            .navigationTitle("Add Trip")
+        }
+    }
+
+    private func saveTrip() {
+        guard fieldsAreValid() else {
+            return
+        }
+
+        let newTrip = Trip(context: managedObjectContext)
+        newTrip.trip_id = UUID()
+        newTrip.country = country
+        newTrip.city = city
+        newTrip.notes = notes
+        newTrip.dateFrom = dateFrom
+        newTrip.dateTo = dateTo
+
+        do {
+            try managedObjectContext.save()
+            presentationMode.wrappedValue.dismiss()
+        } catch {
+            let nsError = error as NSError
+            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+        }
+    }
+
+    private func fieldsAreValid() -> Bool {
+        return validateCountry() && validateCity() && validateNotes() && validateDates()
+    }
+
+    @discardableResult
+    private func validateCountry() -> Bool {
+        if country.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            countryError = "Country cannot be empty"
+            return false
+        } else if !country.allSatisfy({ $0.isLetter || $0.isWhitespace }) {
+            countryError = "Country can only contain letters"
+            return false
+        }
+        countryError = ""
+        return true
+    }
+
+    @discardableResult
+    private func validateCity() -> Bool {
+        if city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cityError = "City cannot be empty"
+            return false
+        } else if !city.allSatisfy({ $0.isLetter || $0.isWhitespace }) {
+            cityError = "City can only contain letters"
+            return false
+        }
+        cityError = ""
+        return true
+    }
+
+    @discardableResult
+    private func validateNotes() -> Bool {
+        if notes.count > 500 {
+            notesError = "Notes cannot exceed 500 characters"
+            return false
+        }
+        notesError = ""
+        return true
+    }
+
+    private func validateDates() -> Bool {
+        if dateTo < dateFrom {
+            dateError = "The return date is less than the departure date"
+            return false
+        }
+        dateError = ""
+        return true
+    }
+}
+
+## TripDetailView
+import SwiftUI
+import CoreData
+
+struct TripDetailView: View {
+    
+    var trip: Trip
+    @Environment(\.managedObjectContext) private var viewContext
+    @FetchRequest private var places: FetchedResults<Place>
+    @State private var newPlaceName: String = ""
+    @State private var newPlaceDate = Date()
+    @State private var refreshView = UUID()
+    @State private var isEditing = false
+    @State private var selectedPlace: Place?
+
+    init(trip: Trip) {
+        self.trip = trip
+        let fetchRequest: NSFetchRequest<Place> = Place.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "toTrip == %@", trip)
+        fetchRequest.sortDescriptors = []
+        _places = FetchRequest(fetchRequest: fetchRequest)
+    }
+
+    var sortedPlaces: [Place] {
+        places.sorted { ($0.date ?? Date.distantPast) < ($1.date ?? Date.distantPast) }
+    }
+
+    var body: some View {
+        VStack (alignment: .center) {
+            
+            if (trip.country != "" && trip.city != "") {
+                
+                MapView(cityName: "\(trip.city ?? ""), \(trip.country ?? "")")
+
+            }
+            
+            Text("\(formattedDate(trip.dateFrom)) \(Image(systemName: "arrowshape.right.fill")) \(formattedDate(trip.dateTo))")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                
+                
+            if let notes = trip.notes, !notes.isEmpty {
+                    Text("Notes: \(notes)")
+                        .font(.body)
+                        .padding(10)
+                        .overlay(
+                        Rectangle()
+                            .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [5])).foregroundColor(Color.blue)
+                        )
+
+            }
+                
+            Spacer()
+            Divider()
+
+            List {
+                ForEach(sortedPlaces, id: \.self) { place in
+                    VStack(alignment: .leading) {
+                        Text(place.name ?? "Unknown Place")
+                            .fontWeight(.bold)
+
+                        if let date = place.date {
+                            Text(formattedDate(date))
+                                .font(.caption)
+                        }
+
+                        Picker("Transport", selection: Binding(
+                            get: {
+                                place.toRoute?.transportType ?? "None"
+                            },
+                            set: { newValue in
+                                if let route = place.toRoute {
+                                    route.transportType = newValue == "None" ? nil : newValue
+                                    do {
+                                        try viewContext.save()
+                                        refreshView = UUID()
+                                    } catch {
+                                        print("Error saving transport type: \(error.localizedDescription)")
+                                    }
+                                }
+                            }
+                        )) {
+                            Text("None").tag("None")
+                            Text("Flight").tag("Flight")
+                            Text("Car").tag("Car")
+                            Text("Train").tag("Train")
+                            Text("Bus").tag("Bus")
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                        .frame(maxWidth: .infinity)
+
+                        
+                        .contextMenu {
+                            Button(action: {
+                                deletePlace(place)
+                            }) {
+                                Text("Delete")
+                                Image(systemName: "trash")
+                            }
+
+                            Button(action: {
+                                self.selectedPlace = place
+                                self.newPlaceName = place.name ?? ""
+                                self.newPlaceDate = place.date ?? Date()
+                                self.isEditing = true
+                            }) {
+                                Text("Edit")
+                                Image(systemName: "pencil")
+                            }
+                        }
+                    }
+                    .id(UUID())
+                }
+            }
+            .id(refreshView)
+            .listStyle(PlainListStyle())
+            .background(Color.white)
+
+            VStack {
+                TextField("New Place", text: $newPlaceName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                HStack {
+                    DatePicker("", selection: $newPlaceDate, in: trip.dateFrom!...trip.dateTo!, displayedComponents: [.date, .hourAndMinute])
+                        .datePickerStyle(CompactDatePickerStyle())
+
+                    Button(action: {
+                        if isEditing {
+                            updatePlace()
+                        } else {
+                            addPlace()
+                        }
+                    }) {
+                        Text(isEditing ? "Confirm" : "Add Place")
+                    }
+                    .padding(8)
+                    .background(Color.blue)
+                    .foregroundColor(Color.white)
+                    .cornerRadius(5)
+                }
+                .padding(.top, 10)
+                .padding([.leading, .trailing], 20)
+            }
+            .padding()
+
+            Spacer()
+        }
+        .padding()
+        .navigationTitle("\(trip.country ?? "Unknown Country"), \(trip.city ?? "Unknown City")")
+    }
+
+    private func formattedDate(_ date: Date?) -> String {
+        guard let date = date else { return "Unknown Date" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func addPlace() {
+        guard !newPlaceName.isEmpty else { return }
+
+        let newPlace = Place(context: viewContext)
+        newPlace.name = newPlaceName
+        newPlace.date = newPlaceDate
+        newPlace.place_id = UUID()
+        newPlace.toTrip = trip
+
+        let newRoute = Route(context: viewContext)
+        newRoute.route_id = UUID()
+        newRoute.transportType = "None"
+        newRoute.addToToPlace(newPlace)
+        newRoute.toTrip = trip
+
+        do {
+            try viewContext.save()
+            newPlaceName = ""
+            newPlaceDate = Date()
+            refreshView = UUID()
+        } catch {
+            print(error.localizedDescription)
+        }
+    }
+
+    private func updatePlace() {
+        guard let place = selectedPlace else { return }
+        place.name = newPlaceName
+        place.date = newPlaceDate
+
+        do {
+            try viewContext.save()
+            newPlaceName = ""
+            newPlaceDate = Date()
+            refreshView = UUID()
+            isEditing = false
+        } catch {
+            print(error.localizedDescription)
+        }
+    }
+
+    private func deletePlace(_ place: Place) {
+        viewContext.delete(place)
+
+        do {
+            try viewContext.save()
+            refreshView = UUID() 
+        } catch {
+            print(error.localizedDescription)
+        }
+    }
+}
+
+## RecommendationsView.swift
+
+import SwiftUI
+
+struct RecommendationsView: View {
+    
+    @Environment(\.presentationMode) private var presentationMode
+    
+    var body: some View {
+        NavigationView{
+            VStack(spacing: 20) {
+                Text("Recommendations")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .padding(.top)
+                BlockView(imageName: "shanghai", title: "Shanghai, China", description: "Rich cultural heritage and urban life in China's most dynamic metropolis")
+                BlockView(imageName: "toronto", title: "Toronto, Canada", description: "Discover featuring iconic landmarks in Toronto")
+                BlockView(imageName: "stockholm", title: "Stockholm, Sweden", description: "Explore Stockholm's enchanting blend of historic charm and modern elegance")
+            }
+            .padding()
+        }
+    }
+    
+}
+
+
+struct BlockView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.managedObjectContext) private var managedObjectContext
+    @State private var selectedTrip: Trip? = nil
+    @State private var showingEditRecomendedView = false
+    var imageName: String
+    var title: String
+    var description: String
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            
+            Text(title)
+                .font(.headline)
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundColor(.white)
+            Text(description)
+                .font(.subheadline)
+                .padding(.top, 5)
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundColor(.white)
+        }
+        .padding()
+        .background(
+            ZStack {
+                Image(imageName)
+                    .resizable()
+                    .scaledToFit()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 200)
+                    .cornerRadius(10)
+                Color.black.opacity(0.45)
+            }
+        )
+        .cornerRadius(10)
+        .shadow(radius: 5)
+        .onTapGesture {
+            showingEditRecomendedView.toggle()
+        }
+        .sheet(isPresented: $showingEditRecomendedView) {
+            EditRecomendedView(trip: selectedTrip ?? Trip(context: viewContext),
+                               country: title.split(separator: ",")[1].trimmingCharacters(in: .whitespaces),
+                               city: title.split(separator: ",")[0].trimmingCharacters(in: .whitespaces),
+                               isPresented: $showingEditRecomendedView)
+            .environment(\.managedObjectContext, managedObjectContext)
+
+        }
+    }
+}
+
+
+## CalendarView
+import SwiftUI
+import CoreData
+
+struct CalendarView: View {
+    @Binding var selectedDate: Date
+    var items: FetchedResults<Trip>
+    @State private var selectedTrips: [Trip] = []
+
+    private let calendar: Calendar = {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2 // Monday
+        return calendar
+    }()
+    private let dateFormatter: DateFormatter
+
+    init(selectedDate: Binding<Date>, items: FetchedResults<Trip>) {
+        self._selectedDate = selectedDate
+        self.items = items
+        dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "d"
+    }
+
+    var body: some View {
+        NavigationView {
+            VStack {
+                HStack {
+                    Button(action: {
+                        selectedDate = calendar.date(byAdding: .month, value: -1, to: selectedDate) ?? selectedDate
+                    }) {
+                        Image(systemName: "chevron.left")
+                    }
+                    
+                    Spacer()
+                    
+                    Text(monthYearString(from: selectedDate))
+                        .font(.headline)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        selectedDate = calendar.date(byAdding: .month, value: 1, to: selectedDate) ?? selectedDate
+                    }) {
+                        Image(systemName: "chevron.right")
+                    }
+                }
+                .padding()
+
+                let days = generateDaysInMonth(for: selectedDate)
+                let weekdays = calendar.shortWeekdaySymbols
+
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 7), spacing: 5) {
+                        ForEach(Array(weekdays.dropFirst()) + [weekdays.first!], id: \.self) { weekday in
+                            Text(weekday)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                .frame(maxWidth: .infinity)
+                        }
+
+                        ForEach(days, id: \.self) { date in
+                            if calendar.isDate(date, equalTo: Date.distantPast, toGranularity: .day) {
+                                Text("")
+                                    .frame(maxWidth: .infinity, maxHeight: 40)
+                                    .padding(5)
+                            } else {
+                                VStack {
+                                    Text(dateFormatter.string(from: date))
+                                        .frame(maxWidth: .infinity, maxHeight: 40)
+                                        .padding(5)
+                                        .background(calendar.isDate(date, inSameDayAs: selectedDate) ? Color.blue.opacity(0.3) : Color.clear)
+                                        .cornerRadius(8)
+                                        .onTapGesture {
+                                            selectedDate = date
+                                            selectedTrips = getTrips(for: date)
+                                        }
+                                    
+                                    if hasTripsOnDate(date: date) {
+                                        Color.blue
+                                            .frame(width: 6, height: 6)
+                                            .clipShape(Circle())
+                                    } else {
+                                        Color.clear
+                                            .frame(width: 6, height: 6)
+                                    }
+                                }
+                                .onTapGesture {
+                                    selectedDate = date
+                                    selectedTrips = getTrips(for: date)
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    
+                    if !selectedTrips.isEmpty {
+                        Divider()
+                        ForEach(selectedTrips, id: \.self) { trip in
+                            NavigationLink(destination: TripDetailView(trip: trip)) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack {
+                                        Image("iconTrip")
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(width: 100, height: 100)
+                                            .padding(.trailing, 10)
+
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text("Trip Details:")
+                                                .font(.headline)
+                                                .padding(.bottom, 5)
+
+                                            Text("\(trip.country ?? "Unknown Country"), \(trip.city ?? "Unknown City")")
+                                                .foregroundColor(.black)
+                                                
+                                            Text("\(formattedDate(trip.dateFrom)) -> \(formattedDate(trip.dateTo))")
+                                                .foregroundColor(.gray)
+                                                .font(.footnote)
+                                            
+                                            if let notes = trip.notes, !notes.isEmpty {
+                                                if notes.count > 10 {
+                                                    Text("Notes: more...")
+                                                } else {
+                                                    Text("Notes: \(notes)")
+                                                }
+                                            }
+                                        }
+                                        .padding(.leading, 10)
+                                        .padding(.trailing, 10)
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal)
+                                    .padding()
+
+                                    Divider()
+                                }
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Calendar")
+            }
+        }
+    }
+
+    private func generateDaysInMonth(for date: Date) -> [Date] {
+        guard let range = calendar.range(of: .day, in: .month, for: date),
+              let firstDayOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)),
+              let firstWeekday = calendar.dateComponents([.weekday], from: firstDayOfMonth).weekday else {
+            return []
+        }
+
+        let firstWeekdayIndex = (firstWeekday + 5) % 7 + 1
+        var days = Array(repeating: Date.distantPast, count: firstWeekdayIndex - 1)
+        days += range.compactMap { day -> Date? in
+            calendar.date(byAdding: .day, value: day - 1, to: firstDayOfMonth)
+        }
+
+        return days
+    }
+    
+    private func formattedDate(_ date: Date?) -> String {
+        guard let date = date else { return "Unknown Date" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
+
+    private func monthYearString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
+    }
+
+    private func hasTripsOnDate(date: Date) -> Bool {
+        let tripsOnDate = items.contains { trip in
+            guard let tripStartDate = trip.dateFrom, let tripEndDate = trip.dateTo else { return false }
+            
+            return (date >= tripStartDate && date <= tripEndDate) || Calendar.current.isDate(date, inSameDayAs: tripStartDate)
+        }
+        return tripsOnDate
+    }
+
+    private func getTrips(for date: Date) -> [Trip] {
+        return items.filter { trip in
+            guard let tripStartDate = trip.dateFrom, let tripEndDate = trip.dateTo else { return false }
+            
+            return (date >= tripStartDate && date <= tripEndDate) || Calendar.current.isDate(date, inSameDayAs: tripStartDate)
+        }
+    }
+}
+
+## EditTripView
+import SwiftUI
+
+struct EditTripView: View {
+    @Environment(\.managedObjectContext) private var managedObjectContext
+    var trip: Trip
+    @Binding var isPresented: Bool
+
+    @State private var editedCountry: String
+    @State private var editedCity: String
+    @State private var editedNotes: String
+    @State private var editedDateFrom: Date
+    @State private var editedDateTo: Date
+
+    @State private var isCountryValid: Bool = true
+    @State private var isCityValid: Bool = true
+    @State private var isNotesValid: Bool = true
+    
+    @State private var countryError = ""
+    @State private var cityError = ""
+    @State private var notesError = ""
+    @State private var dateError = ""
+
+    init(trip: Trip, isPresented: Binding<Bool>) {
+        self.trip = trip
+        self._isPresented = isPresented
+        self._editedCountry = State(initialValue: trip.country ?? "")
+        self._editedCity = State(initialValue: trip.city ?? "")
+        self._editedNotes = State(initialValue: trip.notes ?? "")
+        self._editedDateFrom = State(initialValue: trip.dateFrom ?? Date())
+        self._editedDateTo = State(initialValue: trip.dateTo ?? Date())
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Trip Details")) {
+                    TextField("Country", text: $editedCountry)
+                        .overlay(validationIcon(for: isCountryValid))
+                        .onChange(of: editedCountry) { _ in validateCountry() }
+                    if !countryError.isEmpty {
+                        Text(countryError).foregroundColor(.red)
+                    }
+                    TextField("City", text: $editedCity)
+                        .overlay(validationIcon(for: isCityValid))
+                        .onChange(of: editedCity) { _ in validateCity() }
+                    if !cityError.isEmpty {
+                        Text(cityError).foregroundColor(.red)
+                    }
+                    TextField("Notes", text: $editedNotes)
+                        .overlay(validationIcon(for: isNotesValid))
+                        .onChange(of: editedNotes) { _ in validateNotes() }
+                    if !notesError.isEmpty {
+                        Text(notesError).foregroundColor(.red)
+                    }
+                    DatePicker("From", selection: $editedDateFrom, displayedComponents: [.date, .hourAndMinute])
+                    DatePicker("To", selection: $editedDateTo, displayedComponents: [.date, .hourAndMinute])
+                        .onChange(of: editedDateTo) { _ in validateDates() }
+                    if !dateError.isEmpty {
+                        Text(dateError).foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Edit Trip")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        if fieldsAreValid(){
+                            saveChanges()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func saveChanges() {
+        if editedCountry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            isCountryValid = false
+        } else {
+            isCountryValid = true
+        }
+        if editedCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            isCityValid = false
+        } else {
+            isCityValid = true
+        }
+
+
+        if isCountryValid && isCityValid && isNotesValid {
+            trip.country = editedCountry
+            trip.city = editedCity
+            trip.notes = editedNotes
+            trip.dateFrom = editedDateFrom
+            trip.dateTo = editedDateTo
+
+            do {
+                try managedObjectContext.save()
+                isPresented = false
+            } catch {
+                let nsError = error as NSError
+                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+            }
+        }
+    }
+    
+    private func fieldsAreValid() -> Bool {
+        return validateCountry() && validateCity() && validateNotes() && validateDates()
+    }
+    
+    @discardableResult
+    private func validateCountry() -> Bool {
+        if editedCountry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            countryError = "Country cannot be empty"
+            return false
+        } else if !editedCountry.allSatisfy({ $0.isLetter || $0.isWhitespace }) {
+            countryError = "Country can only contain letters"
+            return false
+        }
+        countryError = ""
+        return true
+    }
+    
+    @discardableResult
+    private func validateCity() -> Bool {
+        if editedCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cityError = "City cannot be empty"
+            return false
+        } else if !editedCity.allSatisfy({ $0.isLetter || $0.isWhitespace }) {
+            cityError = "City can only contain letters"
+            return false
+        }
+        cityError = ""
+        return true
+    }
+    
+    @discardableResult
+    private func validateNotes() -> Bool {
+        if editedNotes.count > 500 {
+            notesError = "Notes cannot exceed 500 characters"
+            return false
+        }
+        notesError = ""
+        return true
+    }
+    
+    private func validateDates() -> Bool {
+        if editedDateTo < editedDateFrom {
+            dateError = "The return date is less than the departure date"
+            return false
+        }
+        dateError = ""
+        return true
+    }
+
+    private func validationIcon(for isValid: Bool) -> AnyView {
+        if !isValid {
+            return AnyView(
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.red)
+                    .padding(.trailing, 8)
+            )
+        } else {
+            return AnyView(EmptyView())
+        }
+    }
+
+}
+
+## EditRecomendedView
+import SwiftUI
+
+struct EditRecomendedView: View {
+    @Environment(\.managedObjectContext) private var viewContext
+    var trip: Trip
+    var country: String
+    var city: String
+    @Binding var isPresented: Bool
+
+    @State private var editedCountry: String
+    @State private var editedCity: String
+    @State private var editedNotes: String
+    @State private var editedDateFrom: Date
+    @State private var editedDateTo: Date
+
+    @State private var isCountryValid: Bool = true
+    @State private var isCityValid: Bool = true
+    @State private var isNotesValid: Bool = true
+    
+    @State private var countryError = ""
+    @State private var cityError = ""
+    @State private var notesError = ""
+    @State private var dateError = ""
+
+    init(trip: Trip, country: String, city: String, isPresented: Binding<Bool>) {
+        self.trip = trip
+        self.country = country
+        self.city = city
+        self._isPresented = isPresented
+        self._editedCountry = State(initialValue: trip.country ?? country)
+        self._editedCity = State(initialValue: trip.city ?? city)
+        self._editedNotes = State(initialValue: trip.notes ?? "")
+        self._editedDateFrom = State(initialValue: trip.dateFrom ?? Date())
+        self._editedDateTo = State(initialValue: trip.dateTo ?? Calendar.current.date(byAdding: .day, value: 3, to: Date())!)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Trip Details")) {
+                    TextField("Country", text: $editedCountry)
+                        .overlay(validationIcon(for: isCountryValid))
+                        .onChange(of: editedCountry) { _ in validateCountry() }
+                    if !countryError.isEmpty {
+                        Text(countryError).foregroundColor(.red)
+                    }
+                    TextField("City", text: $editedCity)
+                        .overlay(validationIcon(for: isCityValid))
+                        .onChange(of: editedCity) { _ in validateCity() }
+                    if !cityError.isEmpty {
+                        Text(cityError).foregroundColor(.red)
+                    }
+                    TextField("Notes", text: $editedNotes)
+                        .overlay(validationIcon(for: isNotesValid))
+                        .onChange(of: editedNotes) { _ in validateNotes() }
+                    if !notesError.isEmpty {
+                        Text(notesError).foregroundColor(.red)
+                    }
+                    DatePicker("From", selection: $editedDateFrom, displayedComponents: .date)
+                    DatePicker("To", selection: $editedDateTo, displayedComponents: .date)
+                        .onChange(of: editedDateTo) { _ in validateDates() }
+                    if !dateError.isEmpty {
+                        Text(dateError).foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Trip confirm")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Revoke") {
+                        deleteTrip(trip)
+                        isPresented = false
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        saveChanges()
+                    }
+                }
+            }
+        }
+    }
+
+    private func saveChanges() {
+        if fieldsAreValid() {
+            trip.country = editedCountry
+            trip.city = editedCity
+            trip.notes = editedNotes
+            trip.dateFrom = editedDateFrom
+            trip.dateTo = editedDateTo
+            
+            do {
+                try viewContext.save()
+                isPresented = false
+            } catch {
+                let nsError = error as NSError
+                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+            }
+        }
+    }
+    
+    private func deleteTrip(_ trip: Trip) {
+        viewContext.delete(trip)
+
+        do {
+            try viewContext.save()
+            isPresented = false
+        } catch {
+            print(error.localizedDescription)
+        }
+    }
+    
+    private func fieldsAreValid() -> Bool {
+        return validateCountry() && validateCity() && validateNotes() && validateDates()
+    }
+    
+    @discardableResult
+    private func validateCountry() -> Bool {
+        if editedCountry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            countryError = "Country cannot be empty"
+            return false
+        } else if !editedCountry.allSatisfy({ $0.isLetter || $0.isWhitespace }) {
+            countryError = "Country can only contain letters"
+            return false
+        }
+        countryError = ""
+        return true
+    }
+    
+    @discardableResult
+    private func validateCity() -> Bool {
+        if editedCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cityError = "City cannot be empty"
+            return false
+        } else if !editedCity.allSatisfy({ $0.isLetter || $0.isWhitespace }) {
+            cityError = "City can only contain letters"
+            return false
+        }
+        cityError = ""
+        return true
+    }
+    
+    @discardableResult
+    private func validateNotes() -> Bool {
+        if editedNotes.count > 500 {
+            notesError = "Notes cannot exceed 500 characters"
+            return false
+        }
+        notesError = ""
+        return true
+    }
+    
+    private func validateDates() -> Bool {
+        if editedDateTo < editedDateFrom {
+            dateError = "End date must be after start date"
+            return false
+        }
+        dateError = ""
+        return true
+    }
+
+    private func validationIcon(for isValid: Bool) -> AnyView {
+        if !isValid {
+            return AnyView(
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.red)
+                    .padding(.trailing, 8)
+            )
+        } else {
+            return AnyView(EmptyView())
+        }
+    }
+}
+
+## MapView
+import SwiftUI
+import MapKit
+import CoreLocation
+
+struct MapView: View {
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 51.2465, longitude: 22.5684), // np. Lublin, Poland
+        span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+    )
+    
+    let cityName: String
+
+    var body: some View {
+        Map(coordinateRegion: $region)
+            .onAppear {
+                centerMapOnLocation(named: cityName)
+            }
+            .frame(height: 150)
+    }
+    
+    private func centerMapOnLocation(named name: String) {
+        let geocoder = CLGeocoder()
+        geocoder.geocodeAddressString(name) { (placemarks, error) in
+            if let placemarks = placemarks, let location = placemarks.first?.location {
+                region.center = location.coordinate
+            } else {
+                print("Error in geocoding: \(error?.localizedDescription ?? "Unknown error")")
+            }
+        }
+    }
+}
+
+
